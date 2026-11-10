@@ -244,7 +244,8 @@ void irq_magic(u32 n)
 }
 
 static int in_irq;
-int rt_irq_hold;   /* set while the runtime runs guest code of its own (high-res 3D pass) */
+int rt_irq_hold;
+int irq_defer_kbd;  /* keep key IRQs queued (a frame limiter's wait: deliver them mid-frame instead) */
 
 void irq_poll(void)
 {
@@ -305,8 +306,9 @@ void irq_poll(void)
     }
     { extern void sound_poll(void); sound_poll(); }
     input_pump();
-    while (kbd_r != kbd_w) {
+    while (kbd_r != kbd_w && !irq_defer_kbd) {
         kbd_cur = kbd_q[kbd_r];
+        if (getenv(ENV("KBDLOG"))) { extern void rt_backtrace(const char *); rt_log("kbd irq %02x host %p base %p\n", kbd_cur, __builtin_return_address(0), (void *)GetModuleHandleA(NULL)); rt_backtrace("kbd"); }
         kbd_r = (kbd_r + 1) & 63;
         u32 h = vectors[9];
         if (h < MAGIC_IRET || h >= MAGIC_IRET + 0x100) call_handler(h);

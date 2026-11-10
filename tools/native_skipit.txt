@@ -59,3 +59,5 @@
 44b27c N_stream_wait
 44b2cc N_stream_stop
 413250 N_text_input           # typed text entry (native: no interrupt points inside)
+42caf8 N_any_key              # any key pressed (native: no interrupt points)
+42cb38 N_keys_down

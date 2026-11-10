@@ -19,6 +19,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string.h>
+#include <stdlib.h>
 #include <SDL2/SDL.h>
 #include "rt.h"
 
@@ -145,6 +146,44 @@ void N_mx_vsync(void)
     RET(0);
 }
 
+/* Frame cap (Video menu / ini FrameLimit; 0 = off).  The wait goes where a
+   DOS frame spent its time: in the frame copy into video memory when the
+   frame has one (menus: the loop is "any key?" -> copy -> draw -> handle
+   keys -> flip, and a key IRQ delivered at the flip would be eaten by the
+   next "any key?"), otherwise at the flip.  Interrupts are delivered while
+   waiting, as they arrived on DOS. */
+extern int opt_fps_cap;
+static int cap_pending;     /* a flip happened, its wait not done yet */
+static u64 cap_next;
+
+static void cap_wait(void)
+{
+    int cap = opt_fps_cap;
+    { const char *e = getenv(ENV("FPSCAP")); if (e) cap = atoi(e); }
+    if (cap <= 0) return;
+    u64 f = SDL_GetPerformanceFrequency(), per = f / (u64)cap, now = SDL_GetPerformanceCounter();
+    if (cap_next > now && cap_next - now <= per * 2) {
+        while ((now = SDL_GetPerformanceCounter()) < cap_next) {
+            u64 ms = (cap_next - now) * 1000 / f;
+            if (ms > 1) SDL_Delay((Uint32)(ms - 1));
+            irq_poll();
+        }
+        cap_next += per;
+    } else cap_next = now + per;
+}
+
+/* at_flip = 1 from the flip, 0 from a frame copy */
+static void frame_cap(int at_flip)
+{
+    if (at_flip) {
+        if (cap_pending) cap_wait();    /* last frame had no copy: wait here */
+        cap_pending = 1;
+    } else if (cap_pending) {
+        cap_pending = 0;
+        cap_wait();
+    }
+}
+
 /* 48a222: rotate the three pages, show the one just drawn */
 void N_mx_flip(void)
 {
@@ -155,6 +194,7 @@ void N_mx_flip(void)
     mx_start = pa;
     extern void video_present(int);
     video_present(0);
+    frame_cap(1);
     RET(0);
 }
 
@@ -274,14 +314,18 @@ void N_cp_dash(void) { deinterleave(cpu.r[R_EAX] + 48000, 0xa0000, 4000); RET(0)
 void N_cp_all(void)
 {
     u32 s = RD32(0x493370);
+    frame_cap(0);
     deinterleave(s, RD32(V_ADDR_A), 16000);
     deinterleave(s, RD32(V_ADDR_B), 16000);
     deinterleave(s, RD32(V_ADDR_C), 16000);
     RET(0);
 }
 
-void N_cp_page(void)  { deinterleave(cpu.r[R_EAX], RD32(V_ADDR_A), 16000); RET(0); }   /* 434b7a, 434c8c */
-void N_cp_page150(void) { deinterleave(cpu.r[R_EAX], RD32(V_ADDR_A), 12000); RET(0); } /* 434c03 */
+/* The frame copy into video memory was most of a DOS frame's time, so that
+   is where the keyboard / timer IRQs mostly arrived - after the loop's
+   "any key" check and before its key handling.  Deliver pending ones here. */
+void N_cp_page(void)  { frame_cap(0); deinterleave(cpu.r[R_EAX], RD32(V_ADDR_A), 16000); RET(0); }   /* 434b7a, 434c8c */
+void N_cp_page150(void) { frame_cap(0); deinterleave(cpu.r[R_EAX], RD32(V_ADDR_A), 12000); RET(0); } /* 434c03 */
 
 /* 434da8..434dc0: 320x200 buffer -> one half of a 640-wide screen */
 static void cp640(u32 dst)

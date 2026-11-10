@@ -18,6 +18,7 @@ int opt_mouse_invert = 0;
 int opt_widescreen = 1;       /* 0 off, 1 zoom to the picture (no cutting), 2 fill the width (cuts top/bottom) */
 int opt_hdtext = 1;          /* the game's text redrawn with a smooth font */
 int opt_intro = 1;           /* play the intro / closing videos */
+int opt_fps_cap = 30;        /* frame limit (0 = off): the game's timing was made for DOS frame rates */
 
 static char ini_path[700];
 
@@ -48,6 +49,8 @@ static const char default_ini[] =
     "HDText=1\r\n"
 #endif
     "ShowFPS=0\r\n"
+    "; FrameLimit: frames per second for the game, 0 = off (without a limit the game runs too fast)\r\n"
+    "FrameLimit=30\r\n"
     "SettingsVersion=2\r\n"
     "\r\n"
     "[game]\r\n"
@@ -78,6 +81,7 @@ void settings_load(const char *exe_dir)
     opt_vsync = ini_int("video", "VSync", 1, 0, 1);
     opt_scale = ini_int("video", "RenderScale", 4, 1, 6);
     opt_showfps = ini_int("video", "ShowFPS", 0, 0, 1);
+    opt_fps_cap = ini_int("video", "FrameLimit", 30, 0, 200);
     opt_widescreen = ini_int("video", "Widescreen", 1, 0, 2);
     opt_hdtext = ini_int("video", "HDText", 1, 0, 1);
     if (ini_int("video", "SettingsVersion", 1, 0, 99) < 2) {
@@ -118,6 +122,7 @@ void settings_save_video(void)
     put("Aspect", opt_aspect);
     put("RenderScale", opt_scale);
     put("ShowFPS", opt_showfps);
+    put("FrameLimit", opt_fps_cap);
     put("Widescreen", opt_widescreen);
     put("HDText", opt_hdtext);
     {

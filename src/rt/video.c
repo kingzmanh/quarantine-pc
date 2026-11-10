@@ -727,12 +727,15 @@ enum {
     ID_FXAA = 1300, ID_SHARP = 1310,        /* +0..3 */
     ID_WIN = 1500,                          /* +1..3 */
     ID_FULLSCREEN = 1510, ID_SHOWFPS, ID_VSYNC,
+    ID_FPSCAP = 1600,                       /* +index into g_caps */
     ID_CONTROLS = 1700, ID_ABOUT,
     ID_INVERTY = 1800, ID_MOUSEAIM, ID_SENS = 1810,   /* +index into g_sens */
     ID_WIDE = 1900,                         /* +0..2 */
     ID_HDTEXT = 1910,
 };
 static const int g_sens[] = {25, 50, 75, 100, 150, 200, 300, 400};
+static const int g_caps[] = {0, 15, 20, 25, 30, 35, 60};
+extern int opt_fps_cap;
 extern int opt_mouse_sens, opt_mouse_invert;
 
 int video_has_focus(void) { return win && (SDL_GetWindowFlags(win) & SDL_WINDOW_INPUT_FOCUS); }
@@ -749,6 +752,7 @@ static void update_checks(void)
     CheckMenuItem(g_menu, ID_HDTEXT, MF_BYCOMMAND | (opt_hdtext ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuItem(g_menu, ID_FULLSCREEN, MF_BYCOMMAND | (opt_fullscreen ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuItem(g_menu, ID_SHOWFPS, MF_BYCOMMAND | (opt_showfps ? MF_CHECKED : MF_UNCHECKED));
+    for (int i = 0; i < 7; i++) CheckMenuItem(g_menu, ID_FPSCAP + i, MF_BYCOMMAND | (opt_fps_cap == g_caps[i] ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuItem(g_menu, ID_INVERTY, MF_BYCOMMAND | (opt_mouse_invert ? MF_CHECKED : MF_UNCHECKED));
     game_menu_update(g_menu);
     for (int i = 0; i < 8; i++) CheckMenuItem(g_menu, ID_SENS + i, MF_BYCOMMAND | (g_sens[i] == opt_mouse_sens ? MF_CHECKED : MF_UNCHECKED));
@@ -800,6 +804,16 @@ static HMENU build_menu(void)
     AppendMenuW(view, MF_STRING, ID_FULLSCREEN, L"&Fullscreen\tAlt+Enter");
     AppendMenuW(view, MF_SEPARATOR, 0, NULL);
     AppendMenuW(view, MF_STRING, ID_SHOWFPS, L"Show FPS in title");
+    {
+        HMENU caps = CreatePopupMenu();
+        for (int i = 0; i < 7; i++) {
+            wchar_t t[64];
+            if (g_caps[i]) swprintf(t, 64, L"%d fps%ls", g_caps[i], g_caps[i] == 30 ? L"  (default)" : L"");
+            else swprintf(t, 64, L"Off  (the game may run too fast)");
+            AppendMenuW(caps, MF_STRING, ID_FPSCAP + i, t);
+        }
+        AppendMenuW(view, MF_POPUP, (UINT_PTR)caps, L"Frame &limit  (game speed)");
+    }
     for (int i = 0; i < 8; i++) {
         wchar_t t[32];
         swprintf(t, 32, L"%d%%%ls", g_sens[i], g_sens[i] == 100 ? L"  (default)" : L"");
@@ -853,6 +867,7 @@ void video_menu_command(int id)
     else if (id >= ID_SENS && id < ID_SENS + 8) opt_mouse_sens = g_sens[id - ID_SENS];
     else if (id > ID_WIN && id <= ID_WIN + 3) { set_client_size(640 * (id - ID_WIN), 480 * (id - ID_WIN)); return; }
     else if (id == ID_FULLSCREEN) { video_set_fullscreen(!opt_fullscreen); return; }
+    else if (id >= ID_FPSCAP && id < ID_FPSCAP + 7) opt_fps_cap = g_caps[id - ID_FPSCAP];
     else if (id == ID_SHOWFPS) { opt_showfps = !opt_showfps; if (!opt_showfps) SDL_SetWindowTitle(win, GAME_TITLE); }
     else if (id == ID_CONTROLS) { MessageBoxA(hwnd, game_controls_text(), GAME_TITLE " - Controls", MB_ICONINFORMATION); return; }
     else if (id == ID_ABOUT) { MessageBoxA(hwnd, game_about_text(), "About", MB_ICONINFORMATION); return; }

@@ -40,11 +40,11 @@ static u64 last_present;
 static u32 *rgb;                    /* converted frame */
 
 extern int opt_fullscreen, opt_filter, opt_sharpen, opt_fxaa, opt_aspect, opt_vsync, opt_scale, opt_showfps;
-#if HAVE_HIRES3D
-extern int hires3d_frame(const u8 **pix, const u8 **mask, int *w, int *h);
-#else
-static int hires3d_frame(const u8 **pix, const u8 **mask, int *w, int *h) { (void)pix; (void)mask; (void)w; (void)h; return 0; }
-#endif
+/* a high-resolution 3D layer (libs/brender_hires, Quarantine's hires.c):
+   weak, so ports without one link; hires3d_scales: bit s = scale s offered */
+extern int hires3d_frame(const u8 **pix, const u8 **mask, int *w, int *h) __attribute__((weak));
+extern int hires3d_scales(void) __attribute__((weak));
+static int scale_offered(int s) { return hires3d_scales ? (hires3d_scales() >> s) & 1 : 1; }
 static u32 *rgb_hi;
 static int rgb_hi_n;
 static HMENU g_menu;
@@ -765,6 +765,7 @@ static HMENU build_menu(void)
           help = CreatePopupMenu(), input = CreatePopupMenu(), sens = CreatePopupMenu(), wide = CreatePopupMenu();
     static const wchar_t *cls[7] = {L"", L"  Native", L"  480p-class", L"  720p-class", L"  1080p-class", L"  1440p-class", L"  4K-class"};
     for (int s = 1; s <= 6; s++) {
+        if (!scale_offered(s)) continue;
         wchar_t t[96];
         swprintf(t, 96, L"%dx  (%dx%d)%ls", s, 320 * s, 200 * s, cls[s]);
         AppendMenuW(res, MF_STRING, ID_SCALE + s, t);
@@ -784,7 +785,7 @@ static HMENU build_menu(void)
     AppendMenuW(sharp, MF_STRING, ID_SHARP + 1, L"Low");
     AppendMenuW(sharp, MF_STRING, ID_SHARP + 2, L"Medium");
     AppendMenuW(sharp, MF_STRING, ID_SHARP + 3, L"High");
-    if (HAVE_HIRES3D) AppendMenuW(video, MF_POPUP, (UINT_PTR)res, L"&Internal Resolution");
+    if (hires3d_frame) AppendMenuW(video, MF_POPUP, (UINT_PTR)res, L"&Internal Resolution");
     AppendMenuW(video, MF_POPUP, (UINT_PTR)asp, L"&Aspect Ratio");
     AppendMenuW(wide, MF_STRING, ID_WIDE + 0, L"Off  (the whole 4:3 picture)");
     AppendMenuW(wide, MF_STRING, ID_WIDE + 1, L"Zoom to the picture  (removes black bars, never cuts or stretches)");
@@ -856,7 +857,7 @@ static void set_client_size(int w, int h)
 void video_menu_command(int id)
 {
     extern void settings_save_video(void);
-    if (id > ID_SCALE && id <= ID_SCALE + 6) opt_scale = id - ID_SCALE;
+    if (id > ID_SCALE && id <= ID_SCALE + 6) opt_scale = id - ID_SCALE;   /* hires3d_* read it */
     else if (id >= ID_ASPECT && id <= ID_ASPECT + 2) opt_aspect = id - ID_ASPECT;
     else if (id >= ID_FILTER && id <= ID_FILTER + 4) opt_filter = id - ID_FILTER;
     else if (id >= ID_SHARP && id <= ID_SHARP + 3) opt_sharpen = id - ID_SHARP;
@@ -1062,7 +1063,7 @@ void video_present(int force)
         const u8 *hp;
         int hw, hh;
         const u8 *hm;
-        if (d3d_ok && video_w == 320 && hires3d_frame(&hp, &hm, &hw, &hh)) {
+        if (d3d_ok && video_w == 320 && hires3d_frame && hires3d_frame(&hp, &hm, &hw, &hh)) {
             if (rgb_hi_n < hw * hh) { free(rgb_hi); rgb_hi = malloc((size_t)hw * hh * 4); rgb_hi_n = hw * hh; }
             for (int i = 0; i < hw * hh; i++) rgb_hi[i] = hm[i] ? pal32[hp[i]] : (pal32[hp[i]] & 0x00ffffffu);
             d3d_present(rgb, video_w, video_h, rgb_hi, hw, hh, chars, nchars, cgen);

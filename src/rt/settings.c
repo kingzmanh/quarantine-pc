@@ -37,10 +37,8 @@ static const char default_ini[] =
     "FXAA=0\r\n"
     "; Aspect: 0 4:3 like the original monitors, 1 stretch to the screen, 2 whole multiples (square pixels)\r\n"
     "Aspect=0\r\n"
-#if HAVE_HIRES3D
-    "; RenderScale: the 3D game renders its scenes at this multiple of 320x200 (1..6)\r\n"
+    "; RenderScale: the 3D view is drawn at this multiple of 320x200 (Quarantine: 1, 2 or 4)\r\n"
     "RenderScale=4\r\n"
-#endif
     "; Widescreen: 0 off, 1 zoom to the picture (removes black bars, never cuts or stretches),\r\n"
     ";             2 fill the screen (cuts some of the top and bottom, follows the action)\r\n"
     "Widescreen=1\r\n"

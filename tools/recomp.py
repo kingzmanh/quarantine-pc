@@ -143,6 +143,7 @@ class Gen:
         self.ds_based = False
         self.vram = False          # this function touches the planar VGA window (vram_<mod>.txt)
         self.vram_funcs = set()
+        self.subst = {}            # insn addr -> [(old constant, C expression)] (subst_<mod>.txt)
 
     # ---------- operands ----------
     def reg_rd(self, name):
@@ -1032,6 +1033,13 @@ class Gen:
                     c = self.insn(f, ins, L, nxt)
                 except Exception as ex:
                     c = 'rt_unimpl(0x%x, "gen error %s: %s");' % (a, ins.mnemonic, str(ex).replace('"', "'"))
+                for old_v, expr in self.subst.get(a, ()):
+                    # tools/subst_<mod>.txt: this instruction's constant becomes a runtime expression
+                    tok = '0x%xu' % old_v
+                    c2 = re.sub(r'(?<![0-9a-fA-Fx])' + re.escape(tok) + r'(?![0-9a-fA-F])', '(' + expr + ')', c)
+                    if c2 == c:
+                        raise SystemExit('subst: constant %s not found at %x: %s' % (tok, a, c))
+                    c = c2
                 out.append('    %s /* %x: %s %s */' % (c, a, ins.mnemonic, ins.op_str.replace('*/', '* /')))
                 if m == 'int' and ins.operands[0].imm == 0x21:
                     pass
@@ -1097,6 +1105,13 @@ def main():
             funcs.pop(a, None)
     g = Gen(p, funcs, native, noreturn)
     g.vram_funcs = vram
+    st = native_txt.replace('native_', 'subst_')
+    if st != native_txt and os.path.exists(st):
+        for line in open(st):
+            line = line.split('#')[0].strip()
+            if line:
+                w = line.split(None, 2)
+                g.subst.setdefault(int(w[0], 16), []).append((int(w[1], 16), w[2].strip()))
     g.interproc()
     os.makedirs(outdir, exist_ok=True)
     ents = sorted(funcs)

@@ -61,3 +61,8 @@
 413250 N_text_input           # typed text entry (native: no interrupt points inside)
 42caf8 N_any_key              # any key pressed (native: no interrupt points)
 42cb38 N_keys_down
+# high-resolution 3D pass (hires.c)
+440e0c N_render3d wrap
+43932c N_sky wrap
+4390f0 N_vcopy_full wrap
+4391f4 N_vcopy_half wrap

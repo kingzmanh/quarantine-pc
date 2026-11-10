@@ -68,12 +68,21 @@ static inline u32 VRD8(u32 a)
     u32 o = a - 0xa0000u;
     return o < 0x10000u ? vga_planes[vga_rd_plane][o] : RD8(a);
 }
+extern u8 *vga_capture;      /* non-NULL: VWR8 marks written plane bytes [plane * 65536 + offset] */
 static inline void VWR8(u32 a, u32 v)
 {
     u32 o = a - 0xa0000u;
     if (o >= 0x10000u) { WR8(a, v); return; }
-    for (int p = 0; p < 4; p++) if (vga_wr_mask & (1 << p)) vga_planes[p][o] = (u8)v;
+    for (int p = 0; p < 4; p++) if (vga_wr_mask & (1 << p)) {
+        vga_planes[p][o] = (u8)v;
+        if (vga_capture) vga_capture[p * 65536 + o] = 1;
+    }
 }
+
+/* resolution of a game's high-resolution 3D pass (1 / 0 outside it): the
+   recompiler turns listed constants into expressions of these
+   (tools/subst_<mod>.txt) */
+extern u32 rt_hr_n, rt_hr_k, rt_hr_rowtab;
 static inline u32 VRD16(u32 a) { return VRD8(a) | (VRD8(a + 1) << 8); }
 static inline u32 VRD32(u32 a) { return VRD16(a) | (VRD16(a + 2) << 16); }
 static inline void VWR16(u32 a, u32 v) { VWR8(a, v); VWR8(a + 1, v >> 8); }

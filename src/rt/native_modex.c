@@ -28,6 +28,8 @@
 u8 vga_planes[4][65536];
 int vga_rd_plane;
 u8 vga_wr_mask = 0x0f;
+u8 *vga_capture;
+u32 rt_hr_n = 1, rt_hr_k = 0, rt_hr_rowtab = 0x4a87e8u;   /* Quarantine: the floors' row table */
 
 static int mx_on;               /* the game is in its Mode X */
 static u32 mx_start = 0;        /* display start (plane byte offset) */
@@ -81,6 +83,17 @@ static const u8 *mx_frame(void)
         for (int x = 0; x < 320; x++, lin++) d[x] = vga_planes[lin & 3][(lin >> 2) & 0xffff];
     }
     return frame;
+}
+
+/* the 320x200 picture as last presented */
+const u8 *modex_picture(void) { return mx_on ? frame : NULL; }
+
+/* for the high-resolution 3D layer: the page on screen and the split row */
+int modex_display(u32 *start, int *split)
+{
+    *start = mx_start & 0xffff;
+    *split = mx_split;
+    return mx_on && mx_stride == 80 && mx_pan == 0;
 }
 
 void modex_reset(void)

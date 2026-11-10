@@ -1,2 +1,0 @@
-# Functions of DUKDOS.EXE replaced by native PC code (src/rt/native*.c).
-# <hex address> <C function> [wrap]   ("wrap": the original stays callable via rt_wrap_orig)

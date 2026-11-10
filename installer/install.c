@@ -55,6 +55,77 @@ static u32 *decode_lbm(const u8 *d, size_t n, int *w, int *h)
     return rgba;
 }
 
+
+/* Autodesk FLI/FLC: the first frame -> RGBA, then only the emblem at the top
+   (the first block of lit rows - Quarantine's TITLE.FLI: the biohazard sign
+   above the title), 320x200 pixels shown at 4:3 so stretched 1.2x tall */
+static u16 le16(const u8 *p) { return (u16)(p[0] | p[1] << 8); }
+static u32 le32(const u8 *p) { return (u32)p[0] | p[1] << 8 | p[2] << 16 | (u32)p[3] << 24; }
+
+static u32 *decode_fli(const u8 *d, size_t n, int *w, int *h)
+{
+    if (n < 128 + 16) return NULL;
+    u16 magic = le16(d + 4);
+    if (magic != 0xAF11 && magic != 0xAF12) return NULL;
+    int W = le16(d + 8), H = le16(d + 10);
+    if (W <= 0 || H <= 0 || W > 2048 || H > 2048) return NULL;
+    u8 *pix = calloc((size_t)W * H, 1), pal[768] = {0};
+    size_t p = 128, fend = p + le32(d + p);
+    int nch = le16(d + p + 6);
+    size_t q = p + 16;
+    for (int k = 0; k < nch && q + 6 <= n && q < fend; k++) {
+        u32 cs = le32(d + q);
+        int ct = le16(d + q + 4);
+        const u8 *c = d + q + 6, *ce = d + (q + cs < n ? q + cs : n);
+        if (ct == 4 || ct == 11) {
+            int np = le16(c), idx = 0;
+            c += 2;
+            for (int i = 0; i < np && c + 2 <= ce; i++) {
+                idx += c[0];
+                int cnt = c[1] ? c[1] : 256;
+                c += 2;
+                for (int j = 0; j < cnt && idx + j < 256 && c + 3 <= ce; j++, c += 3)
+                    for (int m = 0; m < 3; m++) pal[(idx + j) * 3 + m] = ct == 11 ? (u8)(c[m] << 2 | c[m] >> 4) : c[m];
+                idx += cnt;
+            }
+        } else if (ct == 15) {                /* BRUN */
+            for (int y = 0; y < H && c < ce; y++) {
+                c++;
+                int x = 0;
+                while (x < W && c < ce) {
+                    int cnt = (signed char)*c++;
+                    if (cnt >= 0) { u8 v = *c++; for (int i = 0; i < cnt && x < W; i++) pix[y * W + x++] = v; }
+                    else for (int i = 0; i < -cnt && x < W && c < ce; i++) pix[y * W + x++] = *c++;
+                }
+            }
+        } else if (ct == 16) {                /* COPY */
+            memcpy(pix, c, (size_t)W * H <= (size_t)(ce - c) ? (size_t)W * H : (size_t)(ce - c));
+        }
+        q += cs;
+    }
+    int y0 = -1, y1 = H;
+    for (int y = 0; y < H; y++) {
+        int lit = 0;
+        for (int x = 0; x < W && !lit; x++) { const u8 *c = pal + pix[y * W + x] * 3; lit = c[0] + c[1] + c[2] >= 60; }
+        if (lit && y0 < 0) y0 = y;
+        if (!lit && y0 >= 0) { y1 = y; break; }
+    }
+    if (y0 < 0) { free(pix); return NULL; }
+    int oh = (int)((y1 - y0) * 1.2 + 0.5);
+    u32 *rgba = calloc((size_t)W * oh, 4);
+    for (int y = 0; y < oh; y++) {
+        int sy = y0 + (int)(y / 1.2);
+        if (sy >= y1) sy = y1 - 1;
+        for (int x = 0; x < W; x++) {
+            const u8 *c = pal + pix[sy * W + x] * 3;
+            rgba[y * W + x] = c[0] + c[1] + c[2] < 60 ? 0 : (0xffu << 24) | (c[0] << 16) | (c[1] << 8) | c[2];
+        }
+    }
+    free(pix);
+    *w = W; *h = oh;
+    return rgba;
+}
+
 static u8 *icon_image(const u32 *sq, int side, int size, u32 *len)
 {
     u32 mask_row = ((size + 31) / 32) * 4;
@@ -89,6 +160,7 @@ int inject_icon_lbm(const char *exe, const u8 *lbm, size_t n)
 {
     int w, h;
     u32 *src = decode_lbm(lbm, n, &w, &h);
+    if (!src) src = decode_fli(lbm, n, &w, &h);
     if (!src) return fail("game emblem picture not understood");
     int x0 = w, y0 = h, x1 = -1, y1 = -1;
     for (int y = 0; y < h; y++)
@@ -225,7 +297,7 @@ int do_install(const InstallOpts *o, void (*cb)(u64, u64, void *), void *user)
     Progress pr = {0};
     pr.cb = cb;
     pr.user = user;
-    pr.total = cd_total_bytes(c) + (8ull << 20);
+    pr.total = cd_total_bytes(c) + game_audio_bytes(c) + (8ull << 20);
     u64 bytes = pr.total + (12ull << 20);
 
     snprintf(game, sizeof game, "%s\\game", o->dir);
@@ -236,6 +308,8 @@ int do_install(const InstallOpts *o, void (*cb)(u64, u64, void *), void *user)
     /* 1. the disc: drive D: of the game, always in the drive */
     setup_log("Copying %s ...", cd_describe(c));
     if (!cd_copy_all(c, cd, &pr)) { cd_close(c); return fail("copying the CD failed"); }
+    /* 1b. the disc's audio tracks (CD music) */
+    if (!game_install_audio(c, game, &pr)) { cd_close(c); return 0; }
     cd_close(c);
 
     /* 2. what the DOS installer put on the hard disk (game_install.c) */

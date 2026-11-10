@@ -1003,6 +1003,16 @@ void video_present(int force)
             else { r = (c >> 11) & 31; g = (c >> 5) & 63; b = c & 31; r = r << 3 | r >> 2; g = g << 2 | g >> 4; b = b << 3 | b >> 2; }
             rgb[i] = 0xff000000u | r << 16 | g << 8 | b;
         }
+        /* video players that draw every other line (Duck's DOS player): an
+           empty line under a drawn one gets the line above */
+        for (int y = 1; y < video_h; y += 2) {
+            u32 *r = rgb + y * video_w, *a = r - video_w;
+            int empty = 1, above = 0;
+            for (int x = 0; x < video_w && empty; x++) empty = (r[x] & 0xffffff) == 0;
+            if (!empty) continue;
+            for (int x = 0; x < video_w && !above; x++) above = (a[x] & 0xffffff) != 0;
+            if (above) memcpy(r, a, video_w * 4);
+        }
         g_v0 = 0; g_v1 = 1;
         if (d3d_ok) d3d_present(rgb, video_w, video_h, NULL, 0, 0, NULL, 0, 0);
         goto shots;

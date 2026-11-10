@@ -1,0 +1,4 @@
+# Functions of DUKDOSNA.EXE replaced by native PC code (src/rt/native*.c).
+# <hex address> <C function> [wrap]   ("wrap": the original stays callable via rt_wrap_orig)
+4121d0 N_movie_frame1 wrap   # frame out: pace at the AVI's rate (movie.c)
+412550 N_movie_frame2 wrap

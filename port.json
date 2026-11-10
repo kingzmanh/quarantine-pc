@@ -1,0 +1,28 @@
+{
+  "title": "Quarantine",
+  "short": "quarantine",
+  "id": "Quarantine",
+  "env": "QU_",
+  "programs": [
+    {
+      "tag": "skipit",
+      "exe": "SKIPIT.EXE",
+      "load": "cd\\SKIPIT.EXE",
+      "dospath": "C:\\SKIPIT.EXE"
+    },
+    {
+      "tag": "dukdos",
+      "exe": "DUKDOSNA.EXE",
+      "load": "cd\\DUKDOSNA.EXE",
+      "dospath": "D:\\DUKDOSNA.EXE"
+    }
+  ],
+  "libs": [
+    "hmi_sos"
+  ],
+  "cd_files": [
+    "SKIPIT.EXE",
+    "BQUAR1DK.AVI"
+  ],
+  "icon_lbm": "TITLE.FLI"
+}

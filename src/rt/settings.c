@@ -56,7 +56,9 @@ static const char default_ini[] =
     "Intro=1\r\n"
     "; MusicVolume / SoundVolume: 0..100 percent (music = the CD's audio tracks)\r\n"
     "MusicVolume=100\r\n"
-    "SoundVolume=100\r\n";
+    "SoundVolume=100\r\n"
+    "; CopyCheckPassed: written as 1 after the first right answer to the copy-protection question\r\n"
+    ";                  (the screen is then skipped); 0 = ask again\r\n";
 
 static int ini_int(const char *sec, const char *key, int def, int lo, int hi)
 {
@@ -129,4 +131,17 @@ void settings_save_video(void)
         WritePrivateProfileStringA("input", "MouseSensitivity", v, ini_path);
         WritePrivateProfileStringA("input", "InvertMouseY", opt_mouse_invert ? "1" : "0", ini_path);
     }
+}
+
+/* small game-side settings (game.c / natives): read and remember a value */
+int settings_get_int(const char *section, const char *key, int def)
+{
+    return GetPrivateProfileIntA(section, key, def, ini_path);
+}
+
+void settings_put_int(const char *section, const char *key, int v)
+{
+    char s[16];
+    snprintf(s, sizeof s, "%d", v);
+    WritePrivateProfileStringA(section, key, s, ini_path);
 }

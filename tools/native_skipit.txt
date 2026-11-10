@@ -66,3 +66,4 @@
 43932c N_sky wrap
 4390f0 N_vcopy_full wrap
 4391f4 N_vcopy_half wrap
+447c44 N_protection wrap      # copy protection: asked until passed once (CopyCheckPassed)

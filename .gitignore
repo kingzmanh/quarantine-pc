@@ -19,3 +19,4 @@ __pycache__/
 *.log
 *_pc.ini
 tools/trace.txt
+release/
